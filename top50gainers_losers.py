@@ -12,6 +12,15 @@ from datetime import datetime
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, asdict
 import logging
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+cg_api_key = os.getenv("CG_API_KEY")
+binance_api_key = os.getenv("BINANCE_API_KEY")
+binance_api_secret = os.getenv("BINANCE_API_SECRET")
+bybit_api_key = os.getenv("BYBIT_API_KEY")
+bybit_api_secret = os.getenv("BYBIT_API_SECRET")
 
 # Configure logging
 logging.basicConfig(
@@ -528,11 +537,10 @@ def main():
     
     # Initialize the aggregator with provided API keys
     aggregator = CryptoDataAggregator(
-        # coingecko_api_key="your_coingecko_api_key_here",  # Optional for pro features
-        binance_api_key="SjtOcmfwINwKEh5CoJ1x81BcsLZKQMXU2bNLjkjx3YHFaPg1YYGUew49f7C8KwZu",
-        binance_api_secret="yJjXPQRebJe9uQVjAHh4ti0ox5dwUHMemd8hvicWOPbj3qV07FPhXoxEnIdvM7Gt",
-        bybit_api_key="Mwp9e4S8Ss9PsR1CMV",
-        bybit_api_secret="bESnQflVe6Wtg5f7b4pCVNofYWR8VboAb0oL"
+        binance_api_key=binance_api_key,
+        binance_api_secret=binance_api_secret,
+        bybit_api_key=bybit_api_key,
+        bybit_api_secret=bybit_api_secret
     )
     
     try:
