@@ -1,19 +1,22 @@
 #!/usr/bin/env python3
 """
-Top 50 Gainers and Losers Token Tracker
+Top 10 Gainers and Losers Token Tracker
 Fetches data from CoinGecko, Binance, and Bybit exchanges
 """
 
 import requests
 import time
 import json
-import csv
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, asdict
 import logging
 from dotenv import load_dotenv
 import os
+import aiohttp
+import asyncio
+import schedule
+
 
 load_dotenv()
 cg_api_key = os.getenv("CG_API_KEY")
@@ -21,6 +24,9 @@ binance_api_key = os.getenv("BINANCE_API_KEY")
 binance_api_secret = os.getenv("BINANCE_API_SECRET")
 bybit_api_key = os.getenv("BYBIT_API_KEY")
 bybit_api_secret = os.getenv("BYBIT_API_SECRET")
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+TOPIC_ID = os.getenv("TOPIC_ID")
 
 # Configure logging
 logging.basicConfig(
@@ -70,7 +76,7 @@ class CoinGeckoAPI:
             self.base_url = self.pro_url
     
     def get_top_gainers_losers(self, vs_currency: str = "usd", top_coins: int = 1000) -> ExchangeData:
-        """Get top 50 gainers and losers from CoinGecko, using pagination for up to 1000 tokens"""
+        """Get top 10 gainers and losers from CoinGecko, using pagination for up to 1000 tokens"""
         try:
             all_data = []
             per_page = 250
@@ -111,7 +117,7 @@ class CoinGeckoAPI:
                         exchange="CoinGecko",
                         timestamp=datetime.now().isoformat()
                     ))
-                    if len(gainers) >= 50:
+                    if len(gainers) >= 10:
                         break
             # Process losers (negative price changes)
             for token in reversed(all_data):
@@ -128,7 +134,7 @@ class CoinGeckoAPI:
                         exchange="CoinGecko",
                         timestamp=datetime.now().isoformat()
                     ))
-                    if len(losers) >= 50:
+                    if len(losers) >= 10:
                         break
             logging.info(f"CoinGecko: Found {len(gainers)} gainers and {len(losers)} losers")
             return ExchangeData(
@@ -218,8 +224,8 @@ class BinanceAPI:
             gainers = []
             losers = []
             
-            # Top 50 gainers
-            for token in usdt_pairs[:50]:
+            # Top 10 gainers
+            for token in usdt_pairs[:10]:
                 gainers.append(TokenData(
                     symbol=token["symbol"],
                     name=token["name"],
@@ -231,8 +237,8 @@ class BinanceAPI:
                     timestamp=datetime.now().isoformat()
                 ))
             
-            # Top 50 losers
-            for token in usdt_pairs[-50:]:
+            # Top 10 losers
+            for token in usdt_pairs[-10:]:
                 losers.append(TokenData(
                     symbol=token["symbol"],
                     name=token["name"],
@@ -343,8 +349,8 @@ class BybitAPI:
             gainers = []
             losers = []
             
-            # Top 50 gainers
-            for token in usdt_pairs[:50]:
+            # Top 10 gainers
+            for token in usdt_pairs[:10]:
                 gainers.append(TokenData(
                     symbol=token["symbol"],
                     name=token["name"],
@@ -356,8 +362,8 @@ class BybitAPI:
                     timestamp=datetime.now().isoformat()
                 ))
             
-            # Top 50 losers
-            for token in usdt_pairs[-50:]:
+            # Top 10 losers
+            for token in usdt_pairs[-10:]:
                 losers.append(TokenData(
                     symbol=token["symbol"],
                     name=token["name"],
@@ -445,7 +451,7 @@ class CryptoDataAggregator:
     def print_summary(self, data: Dict[str, ExchangeData]):
         """Print a summary of the data"""
         print("\n" + "="*80)
-        print("CRYPTO TOP 50 GAINERS & LOSERS SUMMARY")
+        print("CRYPTO TOP 10 GAINERS & LOSERS SUMMARY")
         print("="*80)
         print("🎯 Enhanced Coverage: 1000+ tokens analyzed for comprehensive market insights")
         print("="*80)
@@ -471,12 +477,12 @@ class CryptoDataAggregator:
             print(f"📉 Top Losers: {len(losers)} tokens")
             
             if gainers:
-                print(f"\n🏆 TOP 50 GAINERS:")
+                print(f"\n🏆 TOP 10 GAINERS:")
                 for i, token in enumerate(gainers, 1):
                     print(f"  {i:2d}. {token.symbol:<8} ({token.name:<20}) ${token.price:<10.6f} {token.price_change_percentage_24h:+.2f}% ${token.volume_24h:,.0f}")
             
             if losers:
-                print(f"\n📉 TOP 50 LOSERS:")
+                print(f"\n📉 TOP 10 LOSERS:")
                 for i, token in enumerate(losers, 1):
                     print(f"  {i:2d}. {token.symbol:<8} ({token.name:<20}) ${token.price:<10.6f} {token.price_change_percentage_24h:+.2f}% ${token.volume_24h:,.0f}")
         
@@ -489,51 +495,128 @@ class CryptoDataAggregator:
         print(f"📊 Coverage Quality: {'✅ Excellent' if (total_gainers + total_losers) >= 150 else '⚠️ Good' if (total_gainers + total_losers) >= 100 else '❌ Limited'}")
         print("="*80)
 
-    def export_to_csv(self, data: Dict[str, ExchangeData], filename: Optional[str] = None):
-        """Export all gainers and losers from all exchanges to a CSV file"""
-        if filename is None:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"crypto_data_{timestamp}.csv"
-        rows = []
-        for exchange, exchange_data in data.items():
-            for i, token in enumerate(exchange_data.gainers, 1):
-                rows.append({
-                    "exchange": exchange,
-                    "type": "gainer",
-                    "rank": i,
-                    "symbol": token.symbol,
-                    "name": token.name,
-                    "price": token.price,
-                    "price_change_24h": token.price_change_24h,
-                    "price_change_percentage_24h": token.price_change_percentage_24h,
-                    "volume_24h": token.volume_24h,
-                    "market_cap": token.market_cap,
-                    "timestamp": token.timestamp
-                })
-            for i, token in enumerate(exchange_data.losers, 1):
-                rows.append({
-                    "exchange": exchange,
-                    "type": "loser",
-                    "rank": i,
-                    "symbol": token.symbol,
-                    "name": token.name,
-                    "price": token.price,
-                    "price_change_24h": token.price_change_24h,
-                    "price_change_percentage_24h": token.price_change_percentage_24h,
-                    "volume_24h": token.volume_24h,
-                    "market_cap": token.market_cap,
-                    "timestamp": token.timestamp
-                })
-        fieldnames = ["exchange", "type", "rank", "symbol", "name", "price", "price_change_24h", "price_change_percentage_24h", "volume_24h", "market_cap", "timestamp"]
-        with open(filename, "w", newline="") as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-            writer.writeheader()
-            writer.writerows(rows)
-        logging.info(f"Data exported to {filename}")
+
+
+async def send_telegram_message(message):
+    """Send a message to Telegram."""
+    if not TELEGRAM_BOT_TOKEN or not TOPIC_ID:
+        logging.warning("Telegram bot token or topic ID not configured. Skipping Telegram message.")
+        return
+
+    
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    payload = {'message_thread_id': TOPIC_ID, 'chat_id': TELEGRAM_CHAT_ID, 'text': message, 'parse_mode': 'HTML'}
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, json=payload) as response:
+                result = await response.json()
+                if response.status != 200:
+                    logging.error(f"Telegram API error: {result}")
+                else:
+                    logging.info("Telegram message sent successfully")
+    except Exception as e:
+        logging.error(f"Error sending Telegram message: {e}")
+
+def format_telegram_message(data: Dict[str, ExchangeData]) -> str:
+    """Format the crypto data for Telegram message"""
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    message = f"🚀 <b>CRYPTO MARKET UPDATE</b> 🚀\n"
+    message += f"📅 {current_time}\n"
+    message += f"📊 <b>Top 10 Gainers & Losers Report</b>\n\n"
+    
+    total_gainers = 0
+    total_losers = 0
+    
+    for exchange_name, exchange_data in data.items():
+        if not exchange_data.success:
+            continue
+            
+        gainers = exchange_data.gainers
+        losers = exchange_data.losers
+        total_gainers += len(gainers)
+        total_losers += len(losers)
+        
+        message += f"<b>{exchange_name.upper()}</b>\n"
+        message += f"✅ Gainers: {len(gainers)} | 📉 Losers: {len(losers)}\n\n"
+        
+        if gainers:
+            message += f"<b>🏆 TOP 10 GAINERS:</b>\n"
+            for i, token in enumerate(gainers[:10], 1):
+                emoji = "🟢" if token.price_change_percentage_24h > 0 else "🔴"
+                message += f"{i}. {emoji} <b>{token.symbol}</b> {token.price_change_percentage_24h:+.2f}%\n"
+                message += f"   💰 ${token.price:.6f} | 📈 ${token.volume_24h:,.0f}\n\n"
+        
+        if losers:
+            message += f"<b>📉 TOP 10 LOSERS:</b>\n"
+            for i, token in enumerate(losers[:10], 1):
+                emoji = "🔴"
+                message += f"{i}. {emoji} <b>{token.symbol}</b> {token.price_change_percentage_24h:+.2f}%\n"
+                message += f"   💰 ${token.price:.6f} | 📈 ${token.volume_24h:,.0f}\n\n"
+    
+    message += f"<b>📊 SUMMARY:</b>\n"
+    message += f"🎯 Total Tokens Analyzed: {total_gainers + total_losers}\n"
+    message += f"📈 Total Gainers: {total_gainers}\n"
+    message += f"📉 Total Losers: {total_losers}\n\n"
+    message += f"⏰ Next update: Tomorrow at 7:00 AM"
+    
+    return message
+
+def run_daily_report():
+    """Run the daily crypto report and send to Telegram"""
+    print("🔄 Starting daily crypto report...")
+    
+    try:
+        # Initialize the aggregator
+        aggregator = CryptoDataAggregator(
+            binance_api_key=binance_api_key,
+            binance_api_secret=binance_api_secret,
+            bybit_api_key=bybit_api_key,
+            bybit_api_secret=bybit_api_secret
+        )
+        
+        # Get data from all exchanges
+        data = aggregator.get_all_exchange_data()
+        
+        # Save data to file
+        aggregator.save_data_to_file(data)
+        
+        # Format and send Telegram message
+        telegram_message = format_telegram_message(data)
+        
+        # Send message asynchronously
+        asyncio.run(send_telegram_message(telegram_message))
+        
+        print("✅ Daily report completed and sent to Telegram!")
+        return True
+        
+    except Exception as e:
+        error_message = f"❌ Error in daily report: {e}"
+        logging.error(error_message)
+        print(error_message)
+        
+        # Send error message to Telegram
+        try:
+            asyncio.run(send_telegram_message(f"❌ <b>Daily Crypto Report Error</b>\n\n{error_message}"))
+        except:
+            pass
+        
+        return False
+
+def schedule_daily_report():
+    """Schedule the daily report to run at 7:00 AM every day"""
+    schedule.every().day.at("07:00").do(run_daily_report)
+    
+    print("⏰ Daily crypto report scheduled for 7:00 AM every day")
+    print("🔄 Starting scheduler...")
+    
+    while True:
+        schedule.run_pending()
+        time.sleep(60)  # Check every minute
 
 def main():
     """Main function to run the crypto data aggregator"""
-    print("🚀 Starting Crypto Top 50 Gainers & Losers Tracker...")
+    print("🚀 Starting Crypto Top 10 Gainers & Losers Tracker...")
     
     # Initialize the aggregator with provided API keys
     aggregator = CryptoDataAggregator(
@@ -553,11 +636,13 @@ def main():
         # Save data to file
         aggregator.save_data_to_file(data)
         
-        # Export to CSV
-        aggregator.export_to_csv(data)
+        # Format and send Telegram message
+        telegram_message = format_telegram_message(data)
+        asyncio.run(send_telegram_message(telegram_message))
         
         print(f"\n✅ Data collection completed successfully!")
-        print(f"📁 Data saved to crypto_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json and .csv")
+        print(f"📁 Data saved to crypto_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json")
+        print(f"📱 Telegram message sent!")
         
     except KeyboardInterrupt:
         print("\n⏹️  Operation cancelled by user")
@@ -566,4 +651,11 @@ def main():
         print(f"❌ Error occurred: {e}")
 
 if __name__ == "__main__":
-    main()
+    import sys
+    
+    if len(sys.argv) > 1 and sys.argv[1] == "--schedule":
+        # Run in scheduled mode
+        schedule_daily_report()
+    else:
+        # Run once immediately
+        main()

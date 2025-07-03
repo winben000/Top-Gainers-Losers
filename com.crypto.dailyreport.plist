@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.crypto.dailyreport</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/python3</string>
+        <string>/Users/winben000/Downloads/task/Top Gainers & Losers/daily_scheduler.py</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/winben000/Downloads/task/Top Gainers & Losers</string>
+    <key>StandardOutPath</key>
+    <string>/Users/winben000/Downloads/task/Top Gainers & Losers/daily_launchd.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/winben000/Downloads/task/Top Gainers & Losers/daily_launchd_error.log</string>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+</dict>
+</plist> 
