@@ -1,0 +1,20 @@
+[Unit]
+Description=Crypto Daily Report Scheduler
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=YOUR_USERNAME
+WorkingDirectory=/path/to/Top Gainers & Losers
+ExecStart=/usr/bin/python3 /path/to/Top Gainers & Losers/daily_scheduler.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Environment variables (optional)
+# Environment=PYTHONPATH=/path/to/Top Gainers & Losers
+
+[Install]
+WantedBy=multi-user.target 
